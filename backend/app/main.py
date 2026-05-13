@@ -9,10 +9,11 @@ import logging
 import time
 
 from app.config import settings
-from app.database import init_db
+from app.database import init_db, SessionLocal
 from app.events import event_queue, register_event_handlers
 from app.api import vehicles, telemetry, fleet, analytics, websocket
 from app.services.telemetry_simulator import telemetry_simulator
+from app.seed_data import generate_dummy_data
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +36,17 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         logger.info("Database initialized successfully")
+        
+        # Generate dummy data if enabled
+        if settings.GENERATE_DUMMY_DATA:
+            logger.info("Dummy data generation enabled")
+            db = SessionLocal()
+            try:
+                generate_dummy_data(db)
+            except Exception as e:
+                logger.error(f"Dummy data generation failed: {e}")
+            finally:
+                db.close()
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise

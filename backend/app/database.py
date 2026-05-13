@@ -7,14 +7,26 @@ from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
 from app.config import settings
 
-# Create database engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    echo=settings.DB_ECHO,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_pre_ping=True,  # Enable connection health checks
-)
+# Determine if using SQLite
+is_sqlite = settings.USE_SQLITE or settings.DATABASE_URL.startswith("sqlite")
+
+# Create database engine with appropriate settings
+if is_sqlite:
+    # SQLite configuration
+    engine = create_engine(
+        settings.DATABASE_URL,
+        echo=settings.DB_ECHO,
+        connect_args={"check_same_thread": False},  # Allow multiple threads for SQLite
+    )
+else:
+    # MySQL/PostgreSQL configuration
+    engine = create_engine(
+        settings.DATABASE_URL,
+        echo=settings.DB_ECHO,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_pre_ping=True,  # Enable connection health checks
+    )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 10
     
+    # SQLite Mode (for demo without external database)
+    USE_SQLITE: bool = False
+    GENERATE_DUMMY_DATA: bool = False
+    
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ALGORITHM: str = "HS256"

@@ -14,11 +14,11 @@ A full-stack autonomous vehicle fleet management platform demonstrating comprehe
 
 ### DevOps Tools
 - **Containerization**: Docker + Docker Compose
-- **Orchestration**: Kubernetes (IBM Cloud Kubernetes Service)
+- **Orchestration**: Kubernetes (IBM Cloud Kubernetes Service) / IBM Code Engine
 - **Infrastructure as Code**: Terraform
-- **CI/CD**: GitHub Actions
+- **CI/CD**: GitHub Actions with automated deployment
 - **Monitoring**: Prometheus + Grafana (optional)
-- **Cloud Platform**: IBM Cloud
+- **Cloud Platform**: IBM Cloud (IKS & Code Engine)
 
 ## Project Architecture
 
@@ -45,9 +45,14 @@ graph TB
     end
     
     subgraph "Infrastructure"
-        I[IBM Cloud IKS]
+        I[IBM Cloud IKS / Code Engine]
         J[IBM Cloud MySQL]
         K[Container Registry]
+    end
+    
+    subgraph "CI/CD"
+        L[GitHub Actions]
+        M[Automated Deployment]
     end
     
     A -->|REST API| B
@@ -67,6 +72,8 @@ graph TB
     I -.->|Hosts| B
     J -.->|Managed DB| G
     K -.->|Images| I
+    L -.->|Builds & Pushes| K
+    M -.->|Deploys| I
 ```
 
 ## Project Structure
@@ -355,7 +362,9 @@ CREATE TABLE alerts (
 4. Add health checks and restart policies
 5. Create development and production configurations
 
-### Phase 3: Kubernetes Configuration
+### Phase 3: Kubernetes/Code Engine Configuration
+
+#### Option A: Kubernetes Deployment
 1. Create namespace and resource quotas
 2. Set up ConfigMaps and Secrets
 3. Create MySQL StatefulSet with persistent storage
@@ -363,6 +372,15 @@ CREATE TABLE alerts (
 5. Deploy frontend as Deployment
 6. Configure Services and Ingress
 7. Add Horizontal Pod Autoscaler
+
+#### Option B: IBM Code Engine Deployment (Recommended for Simplicity)
+1. Create Code Engine project
+2. Set up IBM Cloud Databases for MySQL
+3. Create secrets and configmaps in Code Engine
+4. Deploy backend application with auto-scaling
+5. Deploy frontend application
+6. Configure custom domains (optional)
+7. Set up monitoring and logging
 
 ### Phase 4: Infrastructure as Code (Terraform)
 1. Set up Terraform project structure
@@ -377,28 +395,45 @@ CREATE TABLE alerts (
 5. Set up remote state management
 6. Add outputs for CI/CD integration
 
-### Phase 5: CI/CD Pipelines
-1. Backend CI pipeline:
-   - Run linting and code quality checks
-   - Execute unit tests
+### Phase 5: CI/CD Pipelines with GitHub Actions
+
+1. **Backend CI Pipeline** (`.github/workflows/backend-ci.yml`):
+   - Run linting and code quality checks (flake8, black)
+   - Execute unit tests with pytest
+   - Generate code coverage reports
    - Build Docker image
    - Push to IBM Container Registry
-   - Run security scans
-2. Frontend CI pipeline:
-   - Run linting and type checking
-   - Execute unit tests
+   - Run security scans (bandit, safety)
+
+2. **Frontend CI Pipeline** (`.github/workflows/frontend-ci.yml`):
+   - Run linting and type checking (ESLint, TypeScript)
+   - Execute unit tests with Vitest
    - Build production bundle
    - Build Docker image
    - Push to IBM Container Registry
-3. Terraform pipeline:
-   - Validate configuration
-   - Run terraform plan
+   - Run Lighthouse CI for performance
+
+3. **Terraform Pipeline** (`.github/workflows/terraform.yml`):
+   - Validate Terraform configuration
+   - Run `terraform plan`
    - Apply on approval (for main branch)
-4. Deployment pipeline:
-   - Deploy to dev environment automatically
-   - Deploy to staging on approval
-   - Deploy to production on approval
+   - Manage IBM Cloud infrastructure
+
+4. **Code Engine Deployment Pipeline** (`.github/workflows/deploy-code-engine.yml`):
+   - Authenticate with IBM Cloud
+   - Select Code Engine project
+   - Deploy backend application with new image
+   - Deploy frontend application with new image
    - Run smoke tests after deployment
+   - Send deployment notifications (Slack/Email)
+   - Automatic rollback on failure
+
+5. **Multi-Environment Strategy**:
+   - **Dev**: Auto-deploy on push to `main`
+   - **Staging**: Deploy on approval after dev success
+   - **Production**: Deploy on approval with manual gate
+   - Environment-specific secrets and configurations
+   - Blue-green deployment for zero downtime
 
 ### Phase 6: Monitoring & Observability
 1. Add Prometheus metrics endpoints
@@ -415,6 +450,322 @@ CREATE TABLE alerts (
 4. Create deployment guides
 5. Add troubleshooting guides
 6. Create helper scripts for common tasks
+
+## IBM Code Engine Deployment Guide
+
+### Why Code Engine?
+
+IBM Code Engine offers several advantages over traditional Kubernetes:
+
+1. **Serverless Architecture**: No cluster management overhead
+2. **Cost Efficiency**: Pay only for actual resource usage, scales to zero
+3. **Faster Deployment**: Deploy in seconds vs minutes
+4. **Built-in CI/CD**: Native GitHub integration
+5. **Auto-scaling**: Automatic horizontal scaling based on load
+6. **Simplified Operations**: No need to manage nodes, pods, or infrastructure
+
+### Code Engine vs Kubernetes Comparison
+
+| Feature | Kubernetes (IKS) | Code Engine |
+|---------|------------------|-------------|
+| Setup Time | 30-60 minutes | 5-10 minutes |
+| Management | Manual cluster management | Fully managed |
+| Scaling | Manual HPA configuration | Automatic |
+| Cost | Fixed cluster cost | Pay-per-use |
+| Complexity | High (K8s expertise needed) | Low (simple CLI/UI) |
+| Best For | Large-scale, complex apps | Microservices, APIs |
+
+### Code Engine Deployment Steps
+
+#### 1. Initial Setup (One-time)
+
+```bash
+# Install IBM Cloud CLI and plugins
+curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+ibmcloud plugin install code-engine
+ibmcloud plugin install container-registry
+
+# Login and setup
+ibmcloud login --sso
+ibmcloud target -r us-south -g default
+
+# Create Code Engine project
+ibmcloud ce project create --name fleet-management
+ibmcloud ce project select --name fleet-management
+
+# Create Container Registry namespace
+ibmcloud cr namespace-add fleet-management
+```
+
+#### 2. Database Setup
+
+**Important**: Code Engine doesn't host databases. Choose one of these options:
+
+##### Option 0: In-Memory SQLite (No External Database - Recommended for Demo)
+
+**Perfect for quick demos and testing!** No external database setup required.
+
+```bash
+# Create secrets for SQLite mode
+ibmcloud ce secret create --name app-config \
+  --from-literal DATABASE_URL="sqlite:///./fleet_management.db" \
+  --from-literal USE_SQLITE="true" \
+  --from-literal GENERATE_DUMMY_DATA="true" \
+  --from-literal SECRET_KEY="demo-secret-key"
+```
+
+**Pros**:
+- ✅ Zero setup time
+- ✅ No cost
+- ✅ Auto-generates dummy data
+- ✅ Perfect for demos
+
+**Cons**:
+- ❌ Data lost on restart
+- ❌ Not suitable for production
+- ❌ Single instance only (no scaling)
+
+**Cost**: $0 | **Setup Time**: 0 minutes
+
+##### Option A: IBM Cloud Databases for MySQL (Recommended)
+
+```bash
+# Create IBM Cloud Databases for MySQL
+ibmcloud resource service-instance-create fleet-mysql \
+  databases-for-mysql standard us-south \
+  -p '{"members_memory_allocation_mb": "3072", "members_disk_allocation_mb": "20480"}'
+
+# Create service credentials
+ibmcloud resource service-key-create fleet-mysql-key \
+  --instance-name fleet-mysql
+
+# Get connection details
+ibmcloud resource service-key fleet-mysql-key --output json
+```
+
+**Cost**: ~$100-300/month | **Setup Time**: 10-15 minutes
+
+##### Option B: PlanetScale (Free Tier for Development)
+
+1. Sign up at https://planetscale.com
+2. Create a new database
+3. Get connection string from dashboard
+4. Use the connection string in your Code Engine secrets
+
+**Cost**: Free (5GB storage) | **Setup Time**: 5 minutes
+
+##### Option C: Other Cloud Providers
+
+- **AWS RDS MySQL**: `aws rds create-db-instance`
+- **Google Cloud SQL**: `gcloud sql instances create`
+- **Azure MySQL**: `az mysql server create`
+- **DigitalOcean**: Via web console or API
+
+##### Option D: Self-Hosted (Development Only)
+
+```bash
+# Deploy MySQL on IBM Cloud Virtual Server
+ibmcloud is instance-create mysql-server \
+  --image ibm-ubuntu-20-04-minimal-amd64-1 \
+  --profile bx2-2x8
+
+# SSH and install MySQL
+ssh root@<instance-ip>
+apt update && apt install mysql-server -y
+```
+
+**Not recommended for production** - requires manual management and backups.
+
+#### 3. Application Deployment
+
+```bash
+# Build and push images
+docker build -t us.icr.io/fleet-management/backend:latest ./backend
+docker build -t us.icr.io/fleet-management/frontend:latest ./frontend
+docker push us.icr.io/fleet-management/backend:latest
+docker push us.icr.io/fleet-management/frontend:latest
+
+# Create secrets
+ibmcloud ce secret create --name mysql-credentials \
+  --from-literal DATABASE_URL="mysql+pymysql://user:pass@host:port/fleet_management" \
+  --from-literal SECRET_KEY="your-secret-key"
+
+# Deploy backend
+ibmcloud ce application create --name fleet-backend \
+  --image us.icr.io/fleet-management/backend:latest \
+  --registry-secret icr-secret \
+  --env-from-secret mysql-credentials \
+  --port 8000 \
+  --min-scale 1 \
+  --max-scale 10 \
+  --cpu 0.5 \
+  --memory 1G
+
+# Deploy frontend
+ibmcloud ce application create --name fleet-frontend \
+  --image us.icr.io/fleet-management/frontend:latest \
+  --registry-secret icr-secret \
+  --port 80 \
+  --min-scale 1 \
+  --max-scale 5 \
+  --cpu 0.25 \
+  --memory 512M
+```
+
+### GitHub Actions Workflows for Code Engine
+
+#### Backend CI/CD Workflow
+
+Create `.github/workflows/backend-ci-cd.yml`:
+
+```yaml
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+      - name: Run tests
+        run: |
+          cd backend
+          pytest --cov=app tests/
+      - name: Lint
+        run: |
+          cd backend
+          flake8 app/
+          black --check app/
+
+  build-and-deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install IBM Cloud CLI
+        run: |
+          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+          ibmcloud plugin install code-engine
+          ibmcloud plugin install container-registry
+      - name: Authenticate
+        run: |
+          ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r us-south
+          ibmcloud cr login
+      - name: Build and Push
+        run: |
+          docker build -t us.icr.io/fleet-management/backend:${{ github.sha }} ./backend
+          docker push us.icr.io/fleet-management/backend:${{ github.sha }}
+      - name: Deploy to Code Engine
+        run: |
+          ibmcloud ce project select --name fleet-management
+          ibmcloud ce application update --name fleet-backend \
+            --image us.icr.io/fleet-management/backend:${{ github.sha }}
+```
+
+#### Frontend CI/CD Workflow
+
+Create `.github/workflows/frontend-ci-cd.yml`:
+
+```yaml
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+      - name: Run tests
+        run: |
+          cd frontend
+          npm test
+      - name: Lint
+        run: |
+          cd frontend
+          npm run lint
+
+  build-and-deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install IBM Cloud CLI
+        run: |
+          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+          ibmcloud plugin install code-engine
+          ibmcloud plugin install container-registry
+      - name: Authenticate
+        run: |
+          ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r us-south
+          ibmcloud cr login
+      - name: Build and Push
+        run: |
+          docker build -t us.icr.io/fleet-management/frontend:${{ github.sha }} ./frontend
+          docker push us.icr.io/fleet-management/frontend:${{ github.sha }}
+      - name: Deploy to Code Engine
+        run: |
+          ibmcloud ce project select --name fleet-management
+          ibmcloud ce application update --name fleet-frontend \
+            --image us.icr.io/fleet-management/frontend:${{ github.sha }}
+```
+
+### Monitoring and Management
+
+```bash
+# View applications
+ibmcloud ce application list
+
+# View logs
+ibmcloud ce application logs --name fleet-backend --follow
+
+# Check application status
+ibmcloud ce application get --name fleet-backend
+
+# View revisions
+ibmcloud ce revision list --application fleet-backend
+
+# Scale application
+ibmcloud ce application update --name fleet-backend --min-scale 2 --max-scale 20
+
+# Rollback to previous version
+ibmcloud ce application update --name fleet-backend \
+  --image us.icr.io/fleet-management/backend:previous-sha
+```
+
 
 ## Environment Variables
 
@@ -461,12 +812,36 @@ environment      = "dev"
 
 ## GitHub Secrets Required
 
-- `IBM_CLOUD_API_KEY` - IBM Cloud API key for deployment
-- `IBM_CLOUD_REGION` - IBM Cloud region
+### IBM Cloud & Code Engine
+- `IBM_CLOUD_API_KEY` - IBM Cloud API key with Code Engine and Container Registry permissions
+- `IBM_CLOUD_REGION` - IBM Cloud region (e.g., `us-south`, `eu-de`, `jp-tok`)
 - `IBM_CR_NAMESPACE` - Container Registry namespace
+- `CODE_ENGINE_PROJECT` - Code Engine project name (e.g., `fleet-management`)
+
+### Database Configuration
+- `DATABASE_URL` - Full MySQL connection string
 - `MYSQL_ROOT_PASSWORD` - MySQL root password
-- `MYSQL_PASSWORD` - Application MySQL password
-- `SECRET_KEY` - Application secret key
+- `MYSQL_PASSWORD` - Application MySQL user password
+- `DB_HOST` - Database host (for Code Engine: IBM Cloud Databases endpoint)
+- `DB_PORT` - Database port (default: 3306)
+- `DB_NAME` - Database name (default: `fleet_management`)
+- `DB_USER` - Database username
+
+### Application Secrets
+- `SECRET_KEY` - Application secret key for JWT/sessions
+- `CORS_ORIGINS` - Allowed CORS origins (comma-separated)
+
+### Deployment Configuration
+- `BACKEND_APP_NAME` - Backend application name in Code Engine (default: `fleet-backend`)
+- `FRONTEND_APP_NAME` - Frontend application name in Code Engine (default: `fleet-frontend`)
+- `BACKEND_MIN_SCALE` - Minimum backend instances (default: 1)
+- `BACKEND_MAX_SCALE` - Maximum backend instances (default: 10)
+- `FRONTEND_MIN_SCALE` - Minimum frontend instances (default: 1)
+- `FRONTEND_MAX_SCALE` - Maximum frontend instances (default: 5)
+
+### Optional Notifications
+- `SLACK_WEBHOOK_URL` - Slack webhook for deployment notifications
+- `NOTIFICATION_EMAIL` - Email for deployment notifications
 
 ## Success Criteria
 
@@ -479,31 +854,56 @@ environment      = "dev"
 
 ### DevOps Requirements
 ✅ Application runs locally via Docker Compose
-✅ Kubernetes manifests deploy successfully
+✅ Kubernetes manifests deploy successfully (Option A)
+✅ Code Engine deployment working (Option B - Recommended)
 ✅ Terraform provisions IBM Cloud infrastructure
 ✅ CI/CD pipelines execute without errors
-✅ Automated tests pass
+✅ Automated tests pass in GitHub Actions
 ✅ Health checks respond correctly
 ✅ Monitoring metrics available
+✅ Auto-scaling configured and tested
+✅ Zero-downtime deployments achieved
+
+### CI/CD Requirements
+✅ Backend CI pipeline runs on every push
+✅ Frontend CI pipeline runs on every push
+✅ Automated deployment to Code Engine on main branch
+✅ Deployment notifications working
+✅ Rollback mechanism tested
+✅ Multi-environment deployment (dev/staging/prod)
+✅ GitHub secrets properly configured
+✅ Container images pushed to IBM Container Registry
 
 ### Documentation Requirements
 ✅ README with setup instructions
 ✅ Architecture documentation
 ✅ API documentation
-✅ Deployment guide
+✅ Deployment guide (Kubernetes & Code Engine)
+✅ CI/CD pipeline documentation
 ✅ Troubleshooting guide
+✅ GitHub Actions workflow examples
 
 ## Timeline Estimate
 
 - **Phase 1**: Local Development Setup - 2-3 hours
 - **Phase 2**: Containerization - 1 hour
-- **Phase 3**: Kubernetes Configuration - 1-2 hours
+- **Phase 3**: Kubernetes/Code Engine Configuration - 1-2 hours
 - **Phase 4**: Infrastructure as Code - 2-3 hours
-- **Phase 5**: CI/CD Pipelines - 2 hours
+- **Phase 5**: CI/CD Pipelines with GitHub Actions - 2-3 hours
 - **Phase 6**: Monitoring & Observability - 1 hour
-- **Phase 7**: Documentation & Scripts - 1 hour
+- **Phase 7**: Documentation & Scripts - 1-2 hours
 
-**Total Estimated Time**: 10-13 hours
+**Total Estimated Time**: 10-15 hours
+
+### Code Engine Deployment Timeline (Alternative)
+- **Phase 1**: Local Development Setup - 2-3 hours
+- **Phase 2**: Containerization - 1 hour
+- **Phase 3**: Code Engine Setup & Deployment - 1 hour
+- **Phase 4**: GitHub Actions CI/CD Setup - 1-2 hours
+- **Phase 5**: Testing & Monitoring - 1 hour
+- **Phase 6**: Documentation - 1 hour
+
+**Code Engine Total**: 7-9 hours (Faster than Kubernetes)
 
 ## Next Steps
 
