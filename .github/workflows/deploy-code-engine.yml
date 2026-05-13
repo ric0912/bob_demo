@@ -22,7 +22,7 @@ jobs:
       
       - name: Authenticate with IBM Cloud
         run: |
-          ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }}
+          ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r ${{ env.IBM_CLOUD_REGION }}
       
       - name: Deploy Backend to Code Engine
         run: |
