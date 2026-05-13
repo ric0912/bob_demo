@@ -25,9 +25,21 @@ jobs:
           ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r ${{ env.IBM_CLOUD_REGION }}
           ibmcloud target -g Default
       
+      - name: Create or Select Code Engine Project
+        run: |
+          # Check if project exists
+          if ! ibmcloud ce project get --name ${{ env.CODE_ENGINE_PROJECT }} &>/dev/null; then
+            echo "Project not found. Creating new Code Engine project..."
+            ibmcloud ce project create --name ${{ env.CODE_ENGINE_PROJECT }}
+            echo "Project created successfully!"
+          else
+            echo "Project already exists. Selecting it..."
+          fi
+          ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
+          echo "Project selected: ${{ env.CODE_ENGINE_PROJECT }}"
+      
       - name: Deploy Backend to Code Engine
         run: |
-          ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
           
           # Check if application exists
           if ibmcloud ce application get --name fleet-backend &>/dev/null; then
@@ -90,10 +102,14 @@ jobs:
           ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r ${{ env.IBM_CLOUD_REGION }}
           ibmcloud target -g Default
       
+      - name: Select Code Engine Project
+        run: |
+          ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
+          echo "Project selected: ${{ env.CODE_ENGINE_PROJECT }}"
+      
       - name: Get Backend URL
         id: backend-url
         run: |
-          ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
           BACKEND_URL=$(ibmcloud ce application get --name fleet-backend --output json | jq -r '.status.url')
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "Backend URL: $BACKEND_URL"
