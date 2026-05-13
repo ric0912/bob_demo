@@ -7,7 +7,7 @@ on:
 
 env:
   IBM_CLOUD_REGION: us-south
-  CODE_ENGINE_PROJECT: fleet-management
+  CODE_ENGINE_PROJECT: skysecure-proj
 
 jobs:
   deploy-backend:
