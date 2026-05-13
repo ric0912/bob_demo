@@ -8,7 +8,6 @@ on:
 env:
   IBM_CLOUD_REGION: us-south
   CODE_ENGINE_PROJECT: fleet-management
-  REGISTRY_NAMESPACE: fleet-management
 
 jobs:
   deploy-backend:
@@ -20,22 +19,12 @@ jobs:
         run: |
           curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
           ibmcloud plugin install code-engine -f
-          ibmcloud plugin install container-registry -f
       
       - name: Authenticate with IBM Cloud
         run: |
-          ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r ${{ env.IBM_CLOUD_REGION }}
-          ibmcloud cr login
+          ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }}
       
-      - name: Build and Push Backend Image
-        run: |
-          docker build -t us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:${{ github.sha }} ./backend
-          docker tag us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:${{ github.sha }} \
-                     us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:latest
-          docker push us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:${{ github.sha }}
-          docker push us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:latest
-      
-      - name: Deploy to Code Engine
+      - name: Deploy Backend to Code Engine
         run: |
           ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
           
@@ -43,12 +32,19 @@ jobs:
           if ibmcloud ce application get --name fleet-backend &>/dev/null; then
             echo "Updating existing application..."
             ibmcloud ce application update --name fleet-backend \
-              --image us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:${{ github.sha }}
+              --build-source . \
+              --build-context-dir backend \
+              --env DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              --env USE_SQLITE="${{ secrets.USE_SQLITE }}" \
+              --env GENERATE_DUMMY_DATA="${{ secrets.GENERATE_DUMMY_DATA }}" \
+              --env SECRET_KEY="${{ secrets.SECRET_KEY }}" \
+              --env CORS_ORIGINS="${{ secrets.CORS_ORIGINS }}" \
+              --wait
           else
             echo "Creating new application..."
             ibmcloud ce application create --name fleet-backend \
-              --image us.icr.io/${{ env.REGISTRY_NAMESPACE }}/backend:${{ github.sha }} \
-              --registry-secret icr-secret \
+              --build-source . \
+              --build-context-dir backend \
               --env DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               --env USE_SQLITE="${{ secrets.USE_SQLITE }}" \
               --env GENERATE_DUMMY_DATA="${{ secrets.GENERATE_DUMMY_DATA }}" \
@@ -59,10 +55,11 @@ jobs:
               --max-scale 10 \
               --cpu 0.5 \
               --memory 1G \
-              --concurrency 100
+              --concurrency 100 \
+              --wait
           fi
       
-      - name: Verify Deployment
+      - name: Verify Backend Deployment
         run: |
           echo "Waiting for application to be ready..."
           sleep 30
@@ -86,12 +83,10 @@ jobs:
         run: |
           curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
           ibmcloud plugin install code-engine -f
-          ibmcloud plugin install container-registry -f
       
       - name: Authenticate with IBM Cloud
         run: |
           ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r ${{ env.IBM_CLOUD_REGION }}
-          ibmcloud cr login
       
       - name: Get Backend URL
         id: backend-url
@@ -101,20 +96,9 @@ jobs:
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "Backend URL: $BACKEND_URL"
       
-      - name: Build and Push Frontend Image
+      - name: Deploy Frontend to Code Engine
         env:
           VITE_API_URL: ${{ steps.backend-url.outputs.backend_url }}
-        run: |
-          docker build \
-            --build-arg VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
-            -t us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:${{ github.sha }} \
-            ./frontend
-          docker tag us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:${{ github.sha }} \
-                     us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:latest
-          docker push us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:${{ github.sha }}
-          docker push us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:latest
-      
-      - name: Deploy to Code Engine
         run: |
           ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
           
@@ -122,20 +106,27 @@ jobs:
           if ibmcloud ce application get --name fleet-frontend &>/dev/null; then
             echo "Updating existing application..."
             ibmcloud ce application update --name fleet-frontend \
-              --image us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:${{ github.sha }}
+              --build-source . \
+              --build-context-dir frontend \
+              --build-dockerfile Dockerfile \
+              --env VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
+              --wait
           else
             echo "Creating new application..."
             ibmcloud ce application create --name fleet-frontend \
-              --image us.icr.io/${{ env.REGISTRY_NAMESPACE }}/frontend:${{ github.sha }} \
-              --registry-secret icr-secret \
+              --build-source . \
+              --build-context-dir frontend \
+              --build-dockerfile Dockerfile \
+              --env VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
               --port 80 \
               --min-scale 1 \
               --max-scale 5 \
               --cpu 0.25 \
-              --memory 512M
+              --memory 512M \
+              --wait
           fi
       
-      - name: Verify Deployment
+      - name: Verify Frontend Deployment
         run: |
           echo "Waiting for application to be ready..."
           sleep 30
