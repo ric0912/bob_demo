@@ -72,9 +72,6 @@ jobs:
               --port 8000 \
               --min-scale 1 \
               --max-scale 1 \
-              --cpu 1 \
-              --memory 1G \
-              --concurrency 100 \
               --wait
           fi
       
