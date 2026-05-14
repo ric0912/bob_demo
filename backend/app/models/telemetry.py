@@ -1,7 +1,7 @@
 """
 Telemetry database model
 """
-from sqlalchemy import Column, String, BigInteger, DECIMAL, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Integer, DECIMAL, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -11,7 +11,7 @@ class Telemetry(Base):
     
     __tablename__ = "telemetry"
     
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     vehicle_id = Column(String(36), ForeignKey("vehicles.id"), nullable=False)
     latitude = Column(DECIMAL(10, 8), nullable=False)
     longitude = Column(DECIMAL(11, 8), nullable=False)

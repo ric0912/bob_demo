@@ -7,9 +7,9 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
+from contextlib import nullcontext
 
 from app.database import Base, get_db
-from app.main import app
 from app.config import settings
 
 # Use in-memory SQLite for testing
@@ -49,18 +49,72 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     """
     Create a test client with database dependency override
     """
+    # Import app here to avoid lifespan issues
+    from fastapi import FastAPI
+    from app.api import vehicles, telemetry, fleet, analytics, websocket
+    
+    # Create a test app without lifespan
+    test_app = FastAPI(
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        description="Fleet Management Platform for Autonomous Vehicles - Test Mode"
+    )
+    
+    # Include API routers
+    test_app.include_router(
+        vehicles.router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Vehicles"]
+    )
+    
+    test_app.include_router(
+        telemetry.router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Telemetry"]
+    )
+    
+    test_app.include_router(
+        fleet.router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Fleet"]
+    )
+    
+    test_app.include_router(
+        analytics.router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Analytics"]
+    )
+    
+    test_app.include_router(
+        websocket.router,
+        tags=["WebSocket"]
+    )
+    
+    # Add health endpoints
+    @test_app.get("/health")
+    async def health_check():
+        return {"status": "healthy", "version": settings.APP_VERSION}
+    
+    @test_app.get("/ready")
+    async def readiness_check():
+        return {"status": "ready", "database": "connected"}
+    
+    @test_app.get("/live")
+    async def liveness_check():
+        return {"status": "alive"}
+    
     def override_get_db():
         try:
             yield db
         finally:
             pass
     
-    app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db] = override_get_db
     
-    with TestClient(app) as test_client:
+    with TestClient(test_app) as test_client:
         yield test_client
     
-    app.dependency_overrides.clear()
+    test_app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="session")
