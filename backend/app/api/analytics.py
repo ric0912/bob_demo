@@ -163,13 +163,11 @@ async def get_performance_metrics(
     start_date = datetime.utcnow() - timedelta(days=days)
     
     # Average assignment completion time
+    # SQLite-compatible: use julianday to calculate difference in seconds
     completed = db.query(
         func.avg(
-            func.timestampdiff(
-                'SECOND',
-                FleetAssignment.assigned_at,
-                FleetAssignment.completed_at
-            )
+            (func.julianday(FleetAssignment.completed_at) -
+             func.julianday(FleetAssignment.assigned_at)) * 86400
         ).label('avg_seconds')
     ).filter(
         and_(

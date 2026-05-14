@@ -103,6 +103,20 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     async def liveness_check():
         return {"status": "alive"}
     
+    @test_app.get("/api/v1/status")
+    async def system_status():
+        return {
+            "application": {
+                "name": settings.APP_NAME,
+                "version": settings.APP_VERSION,
+                "environment": settings.ENVIRONMENT
+            },
+            "event_queue": {
+                "running": False,
+                "queue_size": 0
+            }
+        }
+    
     def override_get_db():
         try:
             yield db

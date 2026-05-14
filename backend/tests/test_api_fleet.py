@@ -8,7 +8,7 @@ import uuid
 
 from app.models.vehicle import Vehicle, VehicleStatus
 from app.models.fleet import FleetAssignment, AssignmentStatus
-from app.models.alert import Alert, AlertSeverity
+from app.models.alert import Alert, AlertSeverity, AlertType
 
 
 @pytest.mark.api
@@ -226,16 +226,16 @@ class TestFleetAPI:
         alert1 = Alert(
             id="alert-1",
             vehicle_id="test-vehicle-id",
-            alert_type="low_battery",
-            severity=AlertSeverity.WARNING,
+            alert_type=AlertType.BATTERY_LOW,
+            severity=AlertSeverity.HIGH,
             message="Battery low",
             acknowledged=False
         )
         alert2 = Alert(
             id="alert-2",
             vehicle_id="test-vehicle-id",
-            alert_type="maintenance",
-            severity=AlertSeverity.INFO,
+            alert_type=AlertType.MAINTENANCE_REQUIRED,
+            severity=AlertSeverity.LOW,
             message="Maintenance due",
             acknowledged=True
         )
@@ -266,8 +266,8 @@ class TestFleetAPI:
         alert = Alert(
             id="alert-1",
             vehicle_id="test-vehicle-id",
-            alert_type="low_battery",
-            severity=AlertSeverity.WARNING,
+            alert_type=AlertType.BATTERY_LOW,
+            severity=AlertSeverity.HIGH,
             message="Battery low",
             acknowledged=False
         )
@@ -377,7 +377,7 @@ class TestFleetDatabase:
         alert = Alert(
             id=str(uuid.uuid4()),
             vehicle_id="test-vehicle-id",
-            alert_type="low_battery",
+            alert_type=AlertType.BATTERY_LOW,
             severity=AlertSeverity.CRITICAL,
             message="Battery critically low",
             acknowledged=False

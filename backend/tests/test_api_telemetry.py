@@ -141,12 +141,13 @@ class TestTelemetryAPI:
         for i in range(3):
             telemetry_data = {
                 "vehicle_id": "test-vehicle-id",
-                "latitude": 37.7749 + i * 0.001,
-                "longitude": -122.4194 + i * 0.001,
-                "speed": 45.5 + i,
-                "battery_level": 85.0 - i
+                "latitude": round(37.7749 + i * 0.001, 8),
+                "longitude": round(-122.4194 + i * 0.001, 8),
+                "speed": round(45.5 + i, 2),
+                "battery_level": round(85.0 - i, 2)
             }
-            client.post("/api/v1/telemetry", json=telemetry_data)
+            post_response = client.post("/api/v1/telemetry", json=telemetry_data)
+            assert post_response.status_code == 201, f"Failed to create telemetry {i}: {post_response.json()}"
         
         # Get vehicle telemetry
         response = client.get("/api/v1/telemetry/vehicle/test-vehicle-id")

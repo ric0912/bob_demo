@@ -10,6 +10,7 @@ from app.models.fleet import AssignmentStatus
 class FleetAssignmentBase(BaseModel):
     """Base fleet assignment schema"""
     vehicle_id: str = Field(..., min_length=1, max_length=36)
+    driver_id: Optional[str] = Field(None, max_length=36)
     route_id: Optional[str] = Field(None, max_length=36)
 
 
@@ -20,6 +21,7 @@ class FleetAssignmentCreate(FleetAssignmentBase):
 
 class FleetAssignmentUpdate(BaseModel):
     """Schema for updating a fleet assignment"""
+    driver_id: Optional[str] = Field(None, max_length=36)
     route_id: Optional[str] = Field(None, max_length=36)
     status: Optional[AssignmentStatus] = None
 

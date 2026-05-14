@@ -22,6 +22,7 @@ class FleetAssignment(Base):
     
     id = Column(String(36), primary_key=True, index=True)
     vehicle_id = Column(String(36), ForeignKey("vehicles.id"), nullable=False)
+    driver_id = Column(String(36), nullable=True)
     route_id = Column(String(36))
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)

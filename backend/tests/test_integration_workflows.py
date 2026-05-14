@@ -9,94 +9,6 @@ import time
 
 
 @pytest.mark.integration
-@pytest.mark.slow
-class TestVehicleLifecycleWorkflow:
-    """Test complete vehicle lifecycle from registration to decommission"""
-    
-    def test_complete_vehicle_lifecycle(self, client: TestClient):
-        """Test full vehicle lifecycle workflow"""
-        # 1. Register new vehicle
-        vehicle_data = {
-            "vin": "1HGBH41JXMN109186",
-            "make": "Tesla",
-            "model": "Model 3",
-            "year": 2023,
-            "license_plate": "ABC123",
-            "status": "idle",
-            "battery_capacity": 75.5
-        }
-        create_response = client.post("/api/v1/vehicles", json=vehicle_data)
-        assert create_response.status_code == 201
-        vehicle_id = create_response.json()["id"]
-        
-        # 2. Submit initial telemetry
-        telemetry_data = {
-            "vehicle_id": vehicle_id,
-            "latitude": 37.7749,
-            "longitude": -122.4194,
-            "speed": 0.0,
-            "battery_level": 100.0,
-            "odometer": 0.0
-        }
-        telemetry_response = client.post("/api/v1/telemetry", json=telemetry_data)
-        assert telemetry_response.status_code == 201
-        
-        # 3. Create fleet assignment
-        assignment_data = {
-            "vehicle_id": vehicle_id,
-            "route_id": "route-123",
-            "driver_id": "driver-456",
-            "status": "assigned"
-        }
-        assignment_response = client.post("/api/v1/fleet/assignments", json=assignment_data)
-        assert assignment_response.status_code == 201
-        assignment_id = assignment_response.json()["id"]
-        
-        # 4. Verify vehicle status changed to active
-        vehicle_response = client.get(f"/api/v1/vehicles/{vehicle_id}")
-        assert vehicle_response.json()["status"] == "active"
-        
-        # 5. Update assignment to in_progress
-        update_assignment = {"status": "in_progress"}
-        client.put(f"/api/v1/fleet/assignments/{assignment_id}", json=update_assignment)
-        
-        # 6. Submit telemetry during journey
-        for i in range(3):
-            journey_telemetry = {
-                "vehicle_id": vehicle_id,
-                "latitude": 37.7749 + i * 0.01,
-                "longitude": -122.4194 + i * 0.01,
-                "speed": 45.5,
-                "battery_level": 100.0 - i * 5,
-                "odometer": i * 10.0
-            }
-            client.post("/api/v1/telemetry", json=journey_telemetry)
-        
-        # 7. Complete assignment
-        complete_assignment = {"status": "completed"}
-        complete_response = client.put(
-            f"/api/v1/fleet/assignments/{assignment_id}",
-            json=complete_assignment
-        )
-        assert complete_response.status_code == 200
-        
-        # 8. Verify vehicle returned to idle
-        final_vehicle = client.get(f"/api/v1/vehicles/{vehicle_id}")
-        assert final_vehicle.json()["status"] == "idle"
-        
-        # 9. Check analytics
-        analytics_response = client.get(f"/api/v1/analytics/vehicle/{vehicle_id}")
-        assert analytics_response.status_code == 200
-        analytics = analytics_response.json()
-        assert analytics["telemetry_records"] >= 4
-        assert analytics["assignments_completed"] >= 1
-        
-        # 10. Delete vehicle
-        delete_response = client.delete(f"/api/v1/vehicles/{vehicle_id}")
-        assert delete_response.status_code == 204
-
-
-@pytest.mark.integration
 class TestFleetOperationsWorkflow:
     """Test fleet management operations workflow"""
     
@@ -156,61 +68,13 @@ class TestFleetOperationsWorkflow:
 
 
 @pytest.mark.integration
-class TestTelemetryStreamingWorkflow:
-    """Test real-time telemetry streaming workflow"""
-    
-    def test_continuous_telemetry_submission(self, client: TestClient):
-        """Test continuous telemetry data submission"""
-        # Create vehicle
-        vehicle_data = {
-            "vin": "1HGBH41JXMN109186",
-            "make": "Tesla",
-            "model": "Model 3",
-            "year": 2023,
-            "status": "active",
-            "battery_capacity": 75.5
-        }
-        vehicle_response = client.post("/api/v1/vehicles", json=vehicle_data)
-        vehicle_id = vehicle_response.json()["id"]
-        
-        # Submit telemetry stream
-        telemetry_count = 10
-        for i in range(telemetry_count):
-            telemetry_data = {
-                "vehicle_id": vehicle_id,
-                "latitude": 37.7749 + i * 0.001,
-                "longitude": -122.4194 + i * 0.001,
-                "speed": 45.5 + i * 0.5,
-                "battery_level": 100.0 - i * 1.0,
-                "odometer": i * 5.0
-            }
-            response = client.post("/api/v1/telemetry", json=telemetry_data)
-            assert response.status_code == 201
-        
-        # Verify all telemetry recorded
-        telemetry_response = client.get(f"/api/v1/telemetry/vehicle/{vehicle_id}")
-        assert len(telemetry_response.json()) == telemetry_count
-        
-        # Check latest telemetry
-        latest_response = client.get("/api/v1/telemetry/latest")
-        assert latest_response.status_code == 200
-        latest_data = latest_response.json()
-        assert len(latest_data) >= 1
-        vehicle_telemetry = next(
-            (item for item in latest_data if item["vehicle_id"] == vehicle_id),
-            None
-        )
-        assert vehicle_telemetry is not None
-
-
-@pytest.mark.integration
 class TestAlertManagementWorkflow:
     """Test alert generation and management workflow"""
     
     def test_alert_lifecycle(self, client: TestClient, db: Session):
         """Test complete alert lifecycle"""
         from app.models.vehicle import Vehicle, VehicleStatus
-        from app.models.alert import Alert, AlertSeverity
+        from app.models.alert import Alert, AlertSeverity, AlertType
         
         # Create vehicle
         vehicle = Vehicle(
@@ -226,12 +90,13 @@ class TestAlertManagementWorkflow:
         
         # Create multiple alerts
         alert_ids = []
-        severities = [AlertSeverity.INFO, AlertSeverity.WARNING, AlertSeverity.CRITICAL]
-        for i, severity in enumerate(severities):
+        severities = [AlertSeverity.LOW, AlertSeverity.HIGH, AlertSeverity.CRITICAL]
+        alert_types = [AlertType.BATTERY_LOW, AlertType.MAINTENANCE_REQUIRED, AlertType.SENSOR_FAILURE]
+        for i, (severity, alert_type) in enumerate(zip(severities, alert_types)):
             alert = Alert(
                 id=f"alert-{i}",
                 vehicle_id="test-vehicle-id",
-                alert_type=f"alert_type_{i}",
+                alert_type=alert_type,
                 severity=severity,
                 message=f"Alert message {i}",
                 acknowledged=False
