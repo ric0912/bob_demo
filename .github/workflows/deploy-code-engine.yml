@@ -27,16 +27,22 @@ jobs:
       
       - name: Create or Select Code Engine Project
         run: |
-          # Check if project exists
-          if ! ibmcloud ce project get --name ${{ env.CODE_ENGINE_PROJECT }} &>/dev/null; then
-            echo "Project not found. Creating new Code Engine project..."
-            ibmcloud ce project create --name ${{ env.CODE_ENGINE_PROJECT }}
-            echo "Project created successfully!"
+          # List existing projects
+          echo "Checking for existing Code Engine projects..."
+          ibmcloud ce project list
+          
+          # Try to select the project first
+          if ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }} 2>/dev/null; then
+            echo "✓ Project '${{ env.CODE_ENGINE_PROJECT }}' selected successfully"
           else
-            echo "Project already exists. Selecting it..."
+            echo "Project '${{ env.CODE_ENGINE_PROJECT }}' not found. Creating new project..."
+            ibmcloud ce project create --name ${{ env.CODE_ENGINE_PROJECT }}
+            ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
+            echo "✓ Project created and selected: ${{ env.CODE_ENGINE_PROJECT }}"
           fi
-          ibmcloud ce project select --name ${{ env.CODE_ENGINE_PROJECT }}
-          echo "Project selected: ${{ env.CODE_ENGINE_PROJECT }}"
+          
+          # Verify project is selected
+          ibmcloud ce project current
       
       - name: Deploy Backend to Code Engine
         run: |
