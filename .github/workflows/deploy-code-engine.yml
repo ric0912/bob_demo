@@ -23,7 +23,7 @@ jobs:
       - name: Authenticate with IBM Cloud
         run: |
           ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }} -r ${{ env.IBM_CLOUD_REGION }}
-          ibmcloud target -g Default
+          ibmcloud target -g default
       
       - name: Create or Select Code Engine Project
         run: |
