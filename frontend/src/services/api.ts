@@ -13,7 +13,9 @@ import type {
   VehicleWithTelemetry,
 } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Support runtime configuration from window.ENV (injected by container)
+// or fall back to build-time env var or localhost
+const API_URL = (window as any).ENV?.VITE_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 class ApiService {
   private client: AxiosInstance;

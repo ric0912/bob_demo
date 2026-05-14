@@ -130,7 +130,8 @@ jobs:
               --build-source . \
               --build-context-dir frontend \
               --build-dockerfile Dockerfile \
-              --build-arg VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
+              --env VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
+              --port 8080 \
               --wait
           else
             echo "Creating new application..."
@@ -138,9 +139,10 @@ jobs:
               --build-source . \
               --build-context-dir frontend \
               --build-dockerfile Dockerfile \
-              --build-arg VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
+              --env VITE_API_URL=${{ steps.backend-url.outputs.backend_url }} \
+              --port 8080 \
               --min-scale 1 \
-              --max-scale 1 \
+              --max-scale 2 \
               --wait
           fi
       
